@@ -1,50 +1,39 @@
 use bevy::prelude::*;
+use bevy::sprite::{Wireframe2dConfig, Wireframe2dPlugin};
 
 fn main() {
-    App::new()
-        .add_plugins(DefaultPlugins)
-        .add_plugins(HelloPlugin)
-        .run();
+    let mut app = App::new();
+    app.add_plugins((DefaultPlugins, Wireframe2dPlugin));
+    app.add_systems(Startup, setup);
+    app.add_systems(Update, toggle_wireframes);
+    app.run();
 }
 
-pub struct HelloPlugin;
+fn setup(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+) {
+    commands.spawn(Camera2d);
 
-impl Plugin for HelloPlugin {
-    fn build(&self, app: &mut App) {
-        app.insert_resource(GreetTimer(Timer::from_seconds(2.0, TimerMode::Repeating)));
-        app.add_systems(Startup, add_people);
-        app.add_systems(Update, (update_people, greet_people).chain());
+    let shapes = [meshes.add(Circle::new(50.0))];
+
+    for shape in shapes.into_iter().enumerate() {
+        let color = Color::srgb(0.1, 0.1, 0.1);
+
+        commands.spawn((
+            Mesh2d(shape.1),
+            MeshMaterial2d(materials.add(color)),
+            Transform::from_xyz(0.0, 0.0, 0.0),
+        ));
     }
 }
 
-fn add_people(mut commands: Commands) {
-    commands.spawn((Person, Name("Julian Jones".to_string())));
-    commands.spawn((Person, Name("Mac Jones".to_string())));
-    commands.spawn((Person, Name("Harry Jones".to_string())));
-}
-
-fn greet_people(time: Res<Time>, mut timer: ResMut<GreetTimer>, query: Query<&Name, With<Person>>) {
-    if timer.0.tick(time.delta()).just_finished() {
-        for name in &query {
-            println!("hello {}!", name.0);
-        }
+fn toggle_wireframes(
+    mut wireframe_config: ResMut<Wireframe2dConfig>,
+    keyboard: Res<ButtonInput<KeyCode>>,
+) {
+    if keyboard.just_pressed(KeyCode::Space) {
+        wireframe_config.global = !wireframe_config.global;
     }
 }
-
-fn update_people(mut query: Query<&mut Name, With<Person>>) {
-    for mut name in &mut query {
-        if name.0 == "Julian Jones" {
-            name.0 = "Boolean Bones".to_string();
-            break;
-        }
-    }
-}
-
-#[derive(Component)]
-struct Person;
-
-#[derive(Component)]
-struct Name(String);
-
-#[derive(Resource)]
-struct GreetTimer(Timer);
