@@ -5,10 +5,11 @@ pub struct DrawBalls;
 impl Plugin for DrawBalls {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, (draw_balls, draw_text));
+        app.add_systems(Update, move_balls);
     }
 }
 
-pub fn draw_balls(
+fn draw_balls(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
@@ -28,6 +29,12 @@ pub fn draw_balls(
             MeshMaterial2d(materials.add(color)),
             shape.1,
         ));
+    }
+}
+
+fn move_balls(mut query: Query<&mut Transform, With<Mesh2d>>) {
+    for mut shape in &mut query {
+        shape.translation.x += 1.0;
     }
 }
 
