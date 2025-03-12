@@ -1,5 +1,13 @@
 use bevy::prelude::*;
 
+pub struct DrawBalls;
+
+impl Plugin for DrawBalls {
+    fn build(&self, app: &mut App) {
+        app.add_systems(Startup, (draw_balls, draw_text));
+    }
+}
+
 pub fn draw_balls(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -21,7 +29,9 @@ pub fn draw_balls(
             shape.1,
         ));
     }
+}
 
+fn draw_text(mut commands: Commands) {
     commands.spawn((
         Text::new("What da sigma: Press space to debug"),
         Node {
