@@ -1,11 +1,21 @@
 use bevy::prelude::*;
 
+#[derive(Component, Debug)]
+#[require(Transform)]
+struct Ball;
+
+#[derive(Component, Debug)]
+pub struct Velocity {
+    x: f32,
+    y: f32,
+}
+
 pub struct DrawBalls;
 
 impl Plugin for DrawBalls {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, (draw_balls, draw_text));
-        app.add_systems(Update, move_balls);
+        app.add_systems(Update, (move_balls, handle_collision));
     }
 }
 
@@ -18,23 +28,42 @@ fn draw_balls(
 
     let color = Color::srgb(0.1, 0.1, 0.1);
     let ball_size = 15.0;
-    let shapes = [(
+    let balls = [(
         meshes.add(Circle::new(ball_size)),
         Transform::from_xyz(0.0, 0.0, 0.0),
     )];
 
-    for (_, shape) in shapes.into_iter().enumerate() {
+    for (_, ball) in balls.into_iter().enumerate() {
         commands.spawn((
-            Mesh2d(shape.0),
+            Ball,
+            Mesh2d(ball.0),
             MeshMaterial2d(materials.add(color)),
-            shape.1,
+            ball.1,
+            Velocity { x: 10.0, y: -10.0 },
         ));
     }
 }
 
-fn move_balls(mut query: Query<&mut Transform, With<Mesh2d>>) {
-    for mut shape in &mut query {
-        shape.translation.x += 1.0;
+fn move_balls(mut query: Query<(&mut Transform, &Velocity), With<Ball>>) {
+    for (mut transform, velocity) in &mut query {
+        transform.translation.y += velocity.y;
+        transform.translation.x += velocity.x;
+    }
+}
+
+fn handle_collision(
+    mut query: Query<(&Transform, &mut Velocity), With<Ball>>,
+    window: Query<&Window>,
+) {
+    let half_height = window.single().resolution.height() / 2.0;
+    let half_width = window.single().resolution.width() / 2.0;
+
+    for (transform, mut velocity) in &mut query {
+        if transform.translation.y <= -half_height || transform.translation.y >= half_height {
+            velocity.y = -velocity.y;
+        } else if transform.translation.x <= -half_width || transform.translation.x >= half_width {
+            velocity.x = -velocity.x;
+        }
     }
 }
 
