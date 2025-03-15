@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, window::WindowResized};
 
 #[derive(Component, Debug)]
 #[require(Transform)]
@@ -10,12 +10,27 @@ pub struct Velocity {
     y: f32,
 }
 
-pub struct DrawBalls;
+#[derive(Default)]
+struct BallsConfig {
+    balls_move: bool,
+}
 
+pub struct DrawBalls;
 impl Plugin for DrawBalls {
     fn build(&self, app: &mut App) {
+        let mut config = BallsConfig { balls_move: true };
+
         app.add_systems(Startup, (draw_balls, draw_text));
-        app.add_systems(Update, (move_balls, handle_collision));
+        app.add_systems(Update, handle_collision);
+        app.add_systems(
+            Update,
+            move |query: Query<(&mut Transform, &Velocity), With<Ball>>,
+                  resize_reader: EventReader<WindowResized>,
+                  window: Query<&Window>| {
+                on_window_resize(resize_reader, &mut config);
+                move_balls(query, &mut config, window);
+            },
+        );
     }
 }
 
@@ -30,7 +45,7 @@ fn draw_balls(
     let ball_size = 15.0;
     let balls = [(
         meshes.add(Circle::new(ball_size)),
-        Transform::from_xyz(0.0, 0.0, 0.0),
+        Transform::from_xyz(-500.0, 0.0, 0.0),
     )];
 
     for (_, ball) in balls.into_iter().enumerate() {
@@ -44,10 +59,37 @@ fn draw_balls(
     }
 }
 
-fn move_balls(mut query: Query<(&mut Transform, &Velocity), With<Ball>>) {
+fn move_balls(
+    mut query: Query<(&mut Transform, &Velocity), With<Ball>>,
+    config: &mut BallsConfig,
+    window: Query<&Window>,
+) {
+    let half_height = window.single().resolution.height() / 2.0;
+    let half_width = window.single().resolution.width() / 2.0;
+
     for (mut transform, velocity) in &mut query {
-        transform.translation.y += velocity.y;
-        transform.translation.x += velocity.x;
+        let mut translation = transform.translation;
+
+        if config.balls_move == false {
+            // Handling ball being off screen on x
+            if translation.x <= -half_width {
+                translation.x = -half_width + velocity.x;
+            } else if translation.x >= half_width {
+                translation.x = half_width - velocity.x;
+            }
+
+            // Handling ball being off screen on y
+            if translation.y <= -half_height {
+                translation.y = -half_height + velocity.y;
+            } else if translation.y >= half_height {
+                translation.y = half_height - velocity.y
+            }
+        } else {
+            translation.y += velocity.y;
+            translation.x += velocity.x;
+        }
+
+        transform.translation = translation;
     }
 }
 
@@ -77,4 +119,14 @@ fn draw_text(mut commands: Commands) {
             ..default()
         },
     ));
+}
+
+fn on_window_resize(mut resize_reader: EventReader<WindowResized>, config: &mut BallsConfig) {
+    if resize_reader.read().len() == 0 {
+        config.balls_move = true;
+    }
+
+    for _ in resize_reader.read() {
+        config.balls_move = false;
+    }
 }
