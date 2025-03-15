@@ -90,7 +90,17 @@ fn draw_balls(
     balls.push((
         Velocity { x: 5.0, y: -10.0 },
         Transform::from_xyz(0.0, 0.0, 0.0),
-        BallStyle::new_color_only(Color::srgb(0.4, 0.1, 0.1)),
+        BallStyle::new_color_only(Color::srgb(0.6, 0.1, 0.1)),
+    ));
+    balls.push((
+        Velocity { x: 16.0, y: -10.0 },
+        Transform::from_xyz(0.0, 0.0, 0.0),
+        BallStyle::new_color_only(Color::srgb(0.1, 0.8, 0.1)),
+    ));
+    balls.push((
+        Velocity { x: 5.0, y: -5.0 },
+        Transform::from_xyz(0.0, 0.0, 0.0),
+        BallStyle::new_color_only(Color::srgb(0.6, 0.1, 0.9)),
     ));
 
     for ball in balls {
