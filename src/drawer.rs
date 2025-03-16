@@ -202,7 +202,7 @@ fn handle_wall_collision(
             }
         } else if transform.translation.y >= half_height - 15.0 {
             velocity.y = -velocity.y * dampening;
-            transform.translation.y += velocity.y;
+            transform.translation.y = half_height - velocity.y - 15.0;
         }
 
         if transform.translation.x < -half_width + 15.0
@@ -311,8 +311,9 @@ fn on_window_move(
 
     if diff_x != 0 || diff_y != 0 {
         for (mut transform, mut velocity) in &mut query {
-            velocity.x += diff_x as f32 * impulse;
-            velocity.y -= diff_y as f32 * impulse;
+            let mut rng = rand::rng();
+            velocity.x += diff_x as f32 * impulse * rng.random_range(0.8..1.0);
+            velocity.y -= diff_y as f32 * impulse * rng.random_range(0.8..1.0);
 
             transform.translation.x += velocity.x;
             transform.translation.y += velocity.y;
