@@ -1,4 +1,7 @@
-use bevy::{prelude::*, window::WindowResized};
+use bevy::{
+    prelude::*, render::view::window, utils::tracing::instrument::WithSubscriber,
+    window::WindowResized,
+};
 use rand::Rng;
 
 #[derive(Component, Debug)]
@@ -15,6 +18,7 @@ pub struct Velocity {
 struct GlobalBallsConfig {
     balls_move: bool,
     pixel_scaling: f32,
+    last_window_pos: IVec2,
 }
 
 #[derive(Component)]
@@ -63,17 +67,27 @@ impl Plugin for DrawBalls {
         let mut config = GlobalBallsConfig {
             balls_move: true,
             pixel_scaling: 100.0,
+            last_window_pos: IVec2::new(0, 0),
         };
+
+        let mut last_window_pos = IVec2::new(0, 0);
 
         app.add_systems(Startup, (draw_balls, draw_text));
         app.add_systems(
             Update,
-            move |query: Query<(&mut Transform, &mut Velocity), With<Ball>>,
+            move |move_ball_query: Query<(&mut Transform, &mut Velocity), With<Ball>>,
                   resize_reader: EventReader<WindowResized>,
                   window: Query<&Window>,
                   time: Res<Time>| {
                 on_window_resize(resize_reader, &mut config);
-                move_balls(query, &mut config, window, time);
+                move_balls(move_ball_query, &mut config, window, time);
+            },
+        );
+        app.add_systems(
+            Update,
+            move |query: Query<&mut Velocity, With<Ball>>,
+                  window_move_reader: EventReader<WindowMoved>| {
+                on_window_move(window_move_reader, query, &mut last_window_pos);
             },
         );
         app.add_systems(Update, handle_wall_collision);
@@ -90,7 +104,7 @@ fn draw_balls(
     let mut rng = rand::rng();
     let mut balls = Vec::<(Velocity, Transform, BallStyle)>::new();
 
-    for i in 0..10 {
+    for i in 0..5 {
         balls.push((
             Velocity {
                 x: rng.random_range(-10.0..10.0),
@@ -219,16 +233,6 @@ fn handle_wall_collision(
             transform.translation.x += velocity.x;
         }
     }
-
-    // for (mut transform, mut velocity) in &mut query {
-    //     if transform.translation.y >= half_height {
-    //         velocity.y = -velocity.y;
-    //     } else if transform.translation.y <= -half_height {
-    //         velocity.y = -velocity.y - 2.0;
-    //     } else if transform.translation.x <= -half_width || transform.translation.x >= half_width {
-    //         velocity.x = -(velocity.x / dampening);
-    //     }
-    // }
 }
 
 fn draw_text(mut commands: Commands) {
@@ -251,4 +255,36 @@ fn on_window_resize(mut resize_reader: EventReader<WindowResized>, config: &mut 
     for _ in resize_reader.read() {
         config.balls_move = false;
     }
+}
+
+fn on_window_move(
+    mut move_reader: EventReader<WindowMoved>,
+    mut query: Query<&mut Velocity, With<Ball>>,
+    last_window_pos: &mut IVec2,
+) {
+    if move_reader.read().len() == 0 {
+        return;
+    }
+
+    // Handle first time move
+    let window_event = move_reader.read().last().unwrap();
+    if last_window_pos.x == 0 && last_window_pos.y == 0 {
+        last_window_pos.x = window_event.position.x;
+        last_window_pos.y = window_event.position.y;
+        print!("First move")
+    }
+
+    let impulse = 0.05;
+    let diff_x = window_event.position.x - last_window_pos.x;
+    let diff_y = window_event.position.y - last_window_pos.y;
+
+    if diff_x != 0 || diff_y != 0 {
+        for mut velocity in &mut query {
+            velocity.x += diff_x as f32 * impulse;
+            velocity.y -= diff_y as f32 * impulse;
+        }
+    }
+
+    last_window_pos.x = window_event.position.x;
+    last_window_pos.y = window_event.position.y;
 }
