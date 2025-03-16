@@ -1,7 +1,4 @@
-use bevy::{
-    prelude::*, render::view::window, utils::tracing::instrument::WithSubscriber,
-    window::WindowResized,
-};
+use bevy::{prelude::*, window::WindowResized};
 use rand::Rng;
 
 #[derive(Component, Debug)]
@@ -18,7 +15,6 @@ pub struct Velocity {
 struct GlobalBallsConfig {
     balls_move: bool,
     pixel_scaling: f32,
-    last_window_pos: IVec2,
 }
 
 #[derive(Component)]
@@ -67,7 +63,6 @@ impl Plugin for DrawBalls {
         let mut config = GlobalBallsConfig {
             balls_move: true,
             pixel_scaling: 100.0,
-            last_window_pos: IVec2::new(0, 0),
         };
 
         let mut last_window_pos = IVec2::new(0, 0);
@@ -258,7 +253,7 @@ fn keyboard_new_ball(
     query: Query<Entity, With<Ball>>,
     keyboard: Res<ButtonInput<KeyCode>>,
 ) {
-    if (keyboard.just_pressed(KeyCode::KeyN)) {
+    if keyboard.just_pressed(KeyCode::KeyN) {
         let mut count = 0;
         let _ = query.iter().inspect(|_| count += 1).collect::<Vec<_>>();
         let new_ball = random_ball(count as f32 + 1.0);
