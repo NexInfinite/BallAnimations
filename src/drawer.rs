@@ -4,7 +4,7 @@ use bevy::{prelude::*, window::WindowResized};
 #[require(Transform)]
 struct Ball;
 
-#[derive(Component, Debug)]
+#[derive(Component, Debug, Clone, Copy)]
 pub struct Velocity {
     x: f32,
     y: f32,
@@ -13,9 +13,10 @@ pub struct Velocity {
 #[derive(Default)]
 struct GlobalBallsConfig {
     balls_move: bool,
+    pixel_scaling: f32,
 }
 
-#[derive(Default)]
+#[derive(Component)]
 struct BallStyle {
     size: f32,
     color: Color,
@@ -58,19 +59,23 @@ impl BallStyle {
 pub struct DrawBalls;
 impl Plugin for DrawBalls {
     fn build(&self, app: &mut App) {
-        let mut config = GlobalBallsConfig { balls_move: true };
+        let mut config = GlobalBallsConfig {
+            balls_move: true,
+            pixel_scaling: 100.0,
+        };
 
         app.add_systems(Startup, (draw_balls, draw_text));
-        app.add_systems(Update, handle_collision);
         app.add_systems(
             Update,
-            move |query: Query<(&mut Transform, &Velocity), With<Ball>>,
+            move |query: Query<(&mut Transform, &mut Velocity), With<Ball>>,
                   resize_reader: EventReader<WindowResized>,
-                  window: Query<&Window>| {
+                  window: Query<&Window>,
+                  time: Res<Time>| {
                 on_window_resize(resize_reader, &mut config);
-                move_balls(query, &mut config, window);
+                move_balls(query, &mut config, window, time);
             },
         );
+        app.add_systems(Update, handle_wall_collision);
     }
 }
 
@@ -83,25 +88,25 @@ fn draw_balls(
 
     let mut balls = Vec::<(Velocity, Transform, BallStyle)>::new();
     balls.push((
-        Velocity { x: 10.0, y: -10.0 },
-        Transform::from_xyz(-500.0, 0.0, 0.0),
-        BallStyle::default(),
-    ));
-    balls.push((
-        Velocity { x: 5.0, y: -10.0 },
+        Velocity { x: 0.0, y: 0.0 },
         Transform::from_xyz(0.0, 0.0, 0.0),
-        BallStyle::new_color_only(Color::srgb(0.6, 0.1, 0.1)),
+        BallStyle::new_color_only(Color::srgb(0.05, 0.8, 0.15)),
     ));
-    balls.push((
-        Velocity { x: 16.0, y: -10.0 },
-        Transform::from_xyz(0.0, 0.0, 0.0),
-        BallStyle::new_color_only(Color::srgb(0.1, 0.8, 0.1)),
-    ));
-    balls.push((
-        Velocity { x: 5.0, y: -5.0 },
-        Transform::from_xyz(0.0, 0.0, 0.0),
-        BallStyle::new_color_only(Color::srgb(0.6, 0.1, 0.9)),
-    ));
+    // balls.push((
+    //     Velocity { x: 5.0, y: 0.0 },
+    //     Transform::from_xyz(0.0, 0.0, 0.0),
+    //     BallStyle::new_color_only(Color::srgb(0.6, 0.1, 0.1)),
+    // ));
+    // balls.push((
+    //     Velocity { x: 16.0, y: 0.0 },
+    //     Transform::from_xyz(0.0, 0.0, 0.0),
+    //     BallStyle::new_color_only(Color::srgb(0.1, 0.8, 0.1)),
+    // ));
+    // balls.push((
+    //     Velocity { x: -5.0, y: 0.0 },
+    //     Transform::from_xyz(0.0, 0.0, 0.0),
+    //     BallStyle::new_color_only(Color::srgb(0.6, 0.1, 0.9)),
+    // ));
 
     for ball in balls {
         let mesh = meshes.add(Circle::new(ball.2.size));
@@ -112,53 +117,96 @@ fn draw_balls(
 }
 
 fn move_balls(
-    mut query: Query<(&mut Transform, &Velocity), With<Ball>>,
+    mut query: Query<(&mut Transform, &mut Velocity), With<Ball>>,
     config: &mut GlobalBallsConfig,
     window: Query<&Window>,
+    time: Res<Time>,
 ) {
     let half_height = window.single().resolution.height() / 2.0;
     let half_width = window.single().resolution.width() / 2.0;
 
-    for (mut transform, velocity) in &mut query {
+    for (mut transform, mut velocity) in &mut query {
         let mut translation = transform.translation;
 
         if config.balls_move == false {
-            // Handling ball being off screen on x
-            if translation.x <= -half_width {
-                translation.x = -half_width + velocity.x;
-            } else if translation.x >= half_width {
-                translation.x = half_width - velocity.x;
-            }
+            translation =
+                keep_balls_bound(&mut translation, half_height, half_width, velocity.clone());
+        } else if transform.translation.y > -half_height + 15.0 {
+            let (distance, final_velocity) =
+                calc_displacement_and_vel(velocity.clone(), time.delta_secs(), -9.8);
 
-            // Handling ball being off screen on y
-            if translation.y <= -half_height {
-                translation.y = -half_height + velocity.y;
-            } else if translation.y >= half_height {
-                translation.y = half_height - velocity.y
-            }
-        } else {
-            translation.y += velocity.y;
-            translation.x += velocity.x;
+            velocity.y = final_velocity;
+            translation.y += distance * config.pixel_scaling;
         }
 
         transform.translation = translation;
     }
 }
 
-fn handle_collision(
-    mut query: Query<(&Transform, &mut Velocity), With<Ball>>,
+fn keep_balls_bound(
+    translation: &mut Vec3,
+    half_height: f32,
+    half_width: f32,
+    velocity: Velocity,
+) -> Vec3 {
+    // Handling ball being off screen on x
+    if translation.x <= -half_width {
+        translation.x = -half_width + velocity.x;
+    } else if translation.x >= half_width {
+        translation.x = half_width - velocity.x;
+    }
+
+    // Handling ball being off screen on y
+    if translation.y <= -half_height {
+        translation.y = -half_height + velocity.y;
+    } else if translation.y >= half_height {
+        translation.y = half_height - velocity.y
+    }
+
+    return *translation;
+}
+
+fn calc_displacement_and_vel(velocity: Velocity, delta: f32, acceleration: f32) -> (f32, f32) {
+    let distance = velocity.y * delta + 0.5 * acceleration * delta * delta;
+    let final_velocity = velocity.y + acceleration * delta;
+
+    return (distance, final_velocity);
+}
+
+fn handle_wall_collision(
+    mut query: Query<(&mut Transform, &mut Velocity), With<Ball>>,
     window: Query<&Window>,
+    time: Res<Time>,
 ) {
     let half_height = window.single().resolution.height() / 2.0;
     let half_width = window.single().resolution.width() / 2.0;
+    let dampening = 0.8;
 
-    for (transform, mut velocity) in &mut query {
-        if transform.translation.y <= -half_height || transform.translation.y >= half_height {
-            velocity.y = -velocity.y;
-        } else if transform.translation.x <= -half_width || transform.translation.x >= half_width {
-            velocity.x = -velocity.x;
+    for (mut transform, mut velocity) in &mut query {
+        if transform.translation.y < -half_height + 15.0 && velocity.y.abs() > 0.5 {
+            let new_velocity = Velocity {
+                x: velocity.x,
+                y: -velocity.y * dampening,
+            };
+            let (distance, final_velocity) =
+                calc_displacement_and_vel(new_velocity, time.delta_secs(), -9.8);
+            velocity.y = final_velocity;
+            transform.translation.y += distance * 200.0;
+        } else if transform.translation.y <= -half_height + 15.0 {
+            velocity.y = 0.0;
+            transform.translation.y = -half_height + 15.0;
         }
     }
+
+    // for (mut transform, mut velocity) in &mut query {
+    //     if transform.translation.y >= half_height {
+    //         velocity.y = -velocity.y;
+    //     } else if transform.translation.y <= -half_height {
+    //         velocity.y = -velocity.y - 2.0;
+    //     } else if transform.translation.x <= -half_width || transform.translation.x >= half_width {
+    //         velocity.x = -(velocity.x / dampening);
+    //     }
+    // }
 }
 
 fn draw_text(mut commands: Commands) {
