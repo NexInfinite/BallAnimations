@@ -90,7 +90,7 @@ impl Plugin for DrawBalls {
                 on_window_move(window_move_reader, query, &mut last_window_pos);
             },
         );
-        app.add_systems(Update, handle_wall_collision);
+        app.add_systems(Update, (handle_wall_collision, keyboard_new_ball));
     }
 }
 
@@ -101,26 +101,9 @@ fn draw_balls(
 ) {
     commands.spawn(Camera2d);
 
-    let mut rng = rand::rng();
     let mut balls = Vec::<(Velocity, Transform, BallStyle)>::new();
-
     for i in 0..5 {
-        balls.push((
-            Velocity {
-                x: rng.random_range(-10.0..10.0),
-                y: rng.random_range(0.0..15.0),
-            },
-            Transform::from_xyz(
-                rng.random_range(-200.0..200.0),
-                rng.random_range(-200.0..200.0),
-                i as f32,
-            ),
-            BallStyle::new_color_only(Color::srgb(
-                rng.random_range(0.0..1.0),
-                rng.random_range(0.0..1.0),
-                rng.random_range(0.0..1.0),
-            )),
-        ));
+        balls.push(random_ball(i as f32));
     }
 
     for ball in balls {
@@ -237,13 +220,66 @@ fn handle_wall_collision(
 
 fn draw_text(mut commands: Commands) {
     commands.spawn((
-        Text::new("Press space to debug"),
+        Text::new("Press space to debug or n for another ball."),
         Node {
             position_type: PositionType::Absolute,
             top: Val::Px(12.0),
             left: Val::Px(12.0),
             ..default()
         },
+    ));
+}
+
+fn random_ball(z: f32) -> (Velocity, Transform, BallStyle) {
+    let mut rng = rand::rng();
+    return (
+        Velocity {
+            x: rng.random_range(-10.0..10.0),
+            y: rng.random_range(0.0..15.0),
+        },
+        Transform::from_xyz(
+            rng.random_range(-200.0..200.0),
+            rng.random_range(-200.0..200.0),
+            z,
+        ),
+        BallStyle::new_color_only(Color::srgb(
+            rng.random_range(0.0..1.0),
+            rng.random_range(0.0..1.0),
+            rng.random_range(0.0..1.0),
+        )),
+    );
+}
+
+fn keyboard_new_ball(
+    commands: Commands,
+    meshes: ResMut<Assets<Mesh>>,
+    materials: ResMut<Assets<ColorMaterial>>,
+    query: Query<Entity, With<Ball>>,
+    keyboard: Res<ButtonInput<KeyCode>>,
+) {
+    if (keyboard.just_pressed(KeyCode::KeyN)) {
+        let mut count = 0;
+        let _ = query.iter().inspect(|_| count += 1).collect::<Vec<_>>();
+        let new_ball = random_ball(count as f32 + 1.0);
+        spawn_new_ball(commands, meshes, materials, new_ball);
+    }
+}
+
+fn spawn_new_ball(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+    new_ball: (Velocity, Transform, BallStyle),
+) {
+    let mesh = meshes.add(Circle::new(new_ball.2.size));
+    let material = materials.add(new_ball.2.color);
+
+    commands.spawn((
+        Ball,
+        Mesh2d(mesh),
+        MeshMaterial2d(material),
+        new_ball.1,
+        new_ball.0,
     ));
 }
 
@@ -271,7 +307,6 @@ fn on_window_move(
     if last_window_pos.x == 0 && last_window_pos.y == 0 {
         last_window_pos.x = window_event.position.x;
         last_window_pos.y = window_event.position.y;
-        print!("First move")
     }
 
     let impulse = 0.05;
