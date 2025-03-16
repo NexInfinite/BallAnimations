@@ -85,7 +85,7 @@ impl Plugin for DrawBalls {
         );
         app.add_systems(
             Update,
-            move |query: Query<&mut Velocity, With<Ball>>,
+            move |query: Query<(&mut Transform, &mut Velocity), With<Ball>>,
                   window_move_reader: EventReader<WindowMoved>| {
                 on_window_move(window_move_reader, query, &mut last_window_pos);
             },
@@ -201,18 +201,19 @@ fn handle_wall_collision(
 
             // Handle friction for ball rubbing on floor
             velocity.x *= 0.995;
-            if velocity.x.abs() < 0.005 {
-                velocity.x = 0.0;
-
+            if velocity.x.abs() < 0.005 && velocity.y == 0.0 {
                 commands.entity(entity).despawn();
                 println!("Ball despawned!")
             }
+        } else if transform.translation.y >= half_height - 15.0 {
+            velocity.y = -velocity.y * dampening;
+            transform.translation.y += velocity.y;
         }
 
         if transform.translation.x < -half_width + 15.0
             || transform.translation.x > half_width - 15.0
         {
-            velocity.x = -(velocity.x * dampening);
+            velocity.x = -velocity.x * dampening;
             transform.translation.x += velocity.x;
         }
     }
@@ -295,7 +296,7 @@ fn on_window_resize(mut resize_reader: EventReader<WindowResized>, config: &mut 
 
 fn on_window_move(
     mut move_reader: EventReader<WindowMoved>,
-    mut query: Query<&mut Velocity, With<Ball>>,
+    mut query: Query<(&mut Transform, &mut Velocity), With<Ball>>,
     last_window_pos: &mut IVec2,
 ) {
     if move_reader.read().len() == 0 {
@@ -314,9 +315,12 @@ fn on_window_move(
     let diff_y = window_event.position.y - last_window_pos.y;
 
     if diff_x != 0 || diff_y != 0 {
-        for mut velocity in &mut query {
+        for (mut transform, mut velocity) in &mut query {
             velocity.x += diff_x as f32 * impulse;
             velocity.y -= diff_y as f32 * impulse;
+
+            transform.translation.x += velocity.x;
+            transform.translation.y += velocity.y;
         }
     }
 
