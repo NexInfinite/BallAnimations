@@ -1,4 +1,5 @@
 use bevy::{prelude::*, window::WindowResized};
+use rand::Rng;
 
 #[derive(Component, Debug)]
 #[require(Transform)]
@@ -86,27 +87,27 @@ fn draw_balls(
 ) {
     commands.spawn(Camera2d);
 
+    let mut rng = rand::rng();
     let mut balls = Vec::<(Velocity, Transform, BallStyle)>::new();
-    balls.push((
-        Velocity { x: 0.0, y: 0.0 },
-        Transform::from_xyz(0.0, 0.0, 0.0),
-        BallStyle::new_color_only(Color::srgb(0.05, 0.8, 0.15)),
-    ));
-    // balls.push((
-    //     Velocity { x: 5.0, y: 0.0 },
-    //     Transform::from_xyz(0.0, 0.0, 0.0),
-    //     BallStyle::new_color_only(Color::srgb(0.6, 0.1, 0.1)),
-    // ));
-    // balls.push((
-    //     Velocity { x: 16.0, y: 0.0 },
-    //     Transform::from_xyz(0.0, 0.0, 0.0),
-    //     BallStyle::new_color_only(Color::srgb(0.1, 0.8, 0.1)),
-    // ));
-    // balls.push((
-    //     Velocity { x: -5.0, y: 0.0 },
-    //     Transform::from_xyz(0.0, 0.0, 0.0),
-    //     BallStyle::new_color_only(Color::srgb(0.6, 0.1, 0.9)),
-    // ));
+
+    for i in 0..10 {
+        balls.push((
+            Velocity {
+                x: rng.random_range(-10.0..10.0),
+                y: rng.random_range(0.0..15.0),
+            },
+            Transform::from_xyz(
+                rng.random_range(-200.0..200.0),
+                rng.random_range(-200.0..200.0),
+                i as f32,
+            ),
+            BallStyle::new_color_only(Color::srgb(
+                rng.random_range(0.0..1.0),
+                rng.random_range(0.0..1.0),
+                rng.random_range(0.0..1.0),
+            )),
+        ));
+    }
 
     for ball in balls {
         let mesh = meshes.add(Circle::new(ball.2.size));
@@ -131,12 +132,16 @@ fn move_balls(
         if config.balls_move == false {
             translation =
                 keep_balls_bound(&mut translation, half_height, half_width, velocity.clone());
-        } else if transform.translation.y > -half_height + 15.0 {
-            let (distance, final_velocity) =
-                calc_displacement_and_vel(velocity.clone(), time.delta_secs(), -9.8);
+        } else {
+            if transform.translation.y > -half_height + 15.0 {
+                let (distance, final_velocity) =
+                    calc_displacement_and_vel(velocity.clone(), time.delta_secs(), -9.8);
 
-            velocity.y = final_velocity;
-            translation.y += distance * config.pixel_scaling;
+                velocity.y = final_velocity;
+                translation.y += distance * config.pixel_scaling;
+            }
+
+            translation.x += velocity.x;
         }
 
         transform.translation = translation;
@@ -174,7 +179,8 @@ fn calc_displacement_and_vel(velocity: Velocity, delta: f32, acceleration: f32) 
 }
 
 fn handle_wall_collision(
-    mut query: Query<(&mut Transform, &mut Velocity), With<Ball>>,
+    mut commands: Commands,
+    mut query: Query<(Entity, &mut Transform, &mut Velocity), With<Ball>>,
     window: Query<&Window>,
     time: Res<Time>,
 ) {
@@ -182,7 +188,7 @@ fn handle_wall_collision(
     let half_width = window.single().resolution.width() / 2.0;
     let dampening = 0.8;
 
-    for (mut transform, mut velocity) in &mut query {
+    for (entity, mut transform, mut velocity) in &mut query {
         if transform.translation.y < -half_height + 15.0 && velocity.y.abs() > 0.5 {
             let new_velocity = Velocity {
                 x: velocity.x,
@@ -195,6 +201,22 @@ fn handle_wall_collision(
         } else if transform.translation.y <= -half_height + 15.0 {
             velocity.y = 0.0;
             transform.translation.y = -half_height + 15.0;
+
+            // Handle friction for ball rubbing on floor
+            velocity.x *= 0.995;
+            if velocity.x.abs() < 0.005 {
+                velocity.x = 0.0;
+
+                commands.entity(entity).despawn();
+                println!("Ball despawned!")
+            }
+        }
+
+        if transform.translation.x < -half_width + 15.0
+            || transform.translation.x > half_width - 15.0
+        {
+            velocity.x = -(velocity.x * dampening);
+            transform.translation.x += velocity.x;
         }
     }
 
