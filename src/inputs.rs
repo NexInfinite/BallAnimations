@@ -21,7 +21,9 @@ fn toggle_wireframes(
 }
 
 fn close_handler(mut exit: EventWriter<AppExit>, keyboard: Res<ButtonInput<KeyCode>>) {
-    if keyboard.just_pressed(KeyCode::KeyW) && keyboard.pressed(KeyCode::ControlLeft) {
+    if keyboard.just_pressed(KeyCode::KeyW)
+        && (keyboard.pressed(KeyCode::ControlLeft) || keyboard.pressed(KeyCode::ControlRight))
+    {
         exit.send(AppExit::Success);
     } else if keyboard.just_pressed(KeyCode::Escape) {
         exit.send(AppExit::Success);

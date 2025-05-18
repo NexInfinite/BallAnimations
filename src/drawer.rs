@@ -305,7 +305,7 @@ fn on_window_move(
         last_window_pos.y = window_event.position.y;
     }
 
-    let impulse = 0.05;
+    let impulse = 0.03;
     let diff_x = window_event.position.x - last_window_pos.x;
     let diff_y = window_event.position.y - last_window_pos.y;
 
